@@ -1,0 +1,20 @@
+services:
+  - type: web
+    name: lab-tracker
+    runtime: node
+    plan: free
+    buildCommand: npm install && npm run build
+    startCommand: node build
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: "3000"
+      - key: DATA_DIR
+        value: /data
+      - key: APP_PASSWORD
+        sync: false  # set manually in Render dashboard
+    disk:
+      name: tracker-data
+      mountPath: /data
+      sizeGB: 1

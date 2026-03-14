@@ -1,0 +1,10 @@
+node_modules/
+build/
+.svelte-kit/
+data/tracker.db
+data/tracker.db-wal
+data/tracker.db-shm
+data/data.json
+data/data.json.migrated
+.DS_Store
+*.log
