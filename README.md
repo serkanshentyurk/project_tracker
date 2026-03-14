@@ -30,7 +30,7 @@ Each lab deploys their own instance. No shared infrastructure, no third-party ac
 Requires [Node.js](https://nodejs.org/) 20 or later.
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/lab-tracker.git
+git clone https://github.com/serkanshentyurk/lab-tracker.git
 cd lab-tracker
 npm install
 npm run dev
