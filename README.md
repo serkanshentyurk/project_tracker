@@ -2,9 +2,9 @@
 
 A self-hosted project management app built for research labs. Track animals, experiments, milestones, protocols, and decisions — all from one place.
 
-Each lab deploys their own instance. No shared infrastructure, no third-party accounts, no data leaves your server.
+Each lab deploys their own instance. No shared infrastructure, no third-party accounts required.
 
-![SvelteKit](https://img.shields.io/badge/SvelteKit-2-orange) ![SQLite](https://img.shields.io/badge/SQLite-WAL-blue) ![License](https://img.shields.io/badge/license-MIT-green)
+![SvelteKit](https://img.shields.io/badge/SvelteKit-2-orange) ![SQLite](https://img.shields.io/badge/SQLite-Turso-blue) ![License](https://img.shields.io/badge/license-MIT-green)
 
 ---
 
@@ -17,74 +17,101 @@ Each lab deploys their own instance. No shared infrastructure, no third-party ac
 - **Log** — decisions and issues in one place; filter by kind, status, and priority
 - **Protocols** — step-by-step procedures (rendered from markdown) with equipment checklists
 - **Calendar** — aggregates deadlines from milestones, log entries, and custom events
-- **Settings** — everything is editable: project name, aims (with stage trajectories), hypothesis text, Gantt timeline, data import/export
-- **Dynamic Gantt** — generated from milestone phases, not hardcoded; milestone diamonds come from checklist items
+- **Settings** — everything is editable: project name, aims (with stage trajectories), hypothesis text, Gantt timeline
+- **Dynamic Gantt** — generated from milestone phases; milestone diamonds come from checklist items
 - **Rich text editing** — toolbar with bold, italic, headings, lists, code, and colour highlights; live preview
 - **Password protection** — optional shared password via environment variable
-- **SQLite backend** — WAL mode for concurrent access; single file, easy to back up
+- **SQLite** — local file for development, [Turso](https://turso.tech) cloud for production (free tier)
 
 ---
 
-## Quick start
+## Quick start (local development)
 
 Requires [Node.js](https://nodejs.org/) 20 or later.
 
 ```bash
-git clone https://github.com/serkanshentyurk/lab-tracker.git
+git clone https://github.com/YOUR_USERNAME/lab-tracker.git
 cd lab-tracker
 npm install
 npm run dev
 ```
 
-Open [http://localhost:5173](http://localhost:5173). A database (`data/tracker.db`) is created automatically with an example project.
+Open [http://localhost:5173](http://localhost:5173). A local SQLite database (`data/tracker.db`) is created automatically with an example project. No Turso account needed for local development.
 
 ---
 
 ## Deploying for your lab
 
-### Option A: Render (recommended for teams)
+### 1. Create a Turso database (free)
+
+[Turso](https://turso.tech) hosts your SQLite database in the cloud. Free tier includes 9 GB storage and 500 databases.
+
+```bash
+# Install Turso CLI
+curl -sSfL https://get.tur.so/install.sh | bash
+
+# Sign up / log in
+turso auth signup    # or: turso auth login
+
+# Create a database
+turso db create lab-tracker
+
+# Get the connection URL
+turso db show lab-tracker --url
+# → libsql://lab-tracker-yourname.turso.io
+
+# Create an auth token
+turso db tokens create lab-tracker
+# → eyJhbGci...
+```
+
+Save the URL and token — you'll need them in the next step.
+
+### 2. Deploy to Render
 
 1. Fork or clone this repo to your own GitHub account
 2. Go to [render.com](https://render.com) → **New** → **Blueprint**
-3. Connect your repo — Render reads `render.yaml` and creates the service automatically
-4. In the Render dashboard, go to **Environment** and set `APP_PASSWORD` to a shared password for your lab
-5. Done — share the URL with your team
+3. Connect your repo — Render reads `render.yaml` and creates the service
+4. In the Render dashboard, go to **Environment** and set:
+   - `TURSO_URL` → the URL from step 1 (e.g. `libsql://lab-tracker-yourname.turso.io`)
+   - `TURSO_AUTH_TOKEN` → the token from step 1
+   - `APP_PASSWORD` → a shared password for your lab (optional)
+5. Redeploy — your tracker is live
 
-The `render.yaml` configures a web service with a 1 GB persistent disk for the database. Free tier works but spins down after inactivity (~30s cold start). Starter plan ($7/mo) stays warm.
+Free tier on Render spins down after inactivity (~30s cold start). Your data is safe in Turso regardless. Starter plan ($7/mo) keeps it warm.
 
-### Option B: Any server with Node.js
+### Alternative: any server with Node.js
 
 ```bash
 npm install
 npm run build
-APP_PASSWORD=your_secret PORT=3000 node build
+TURSO_URL=libsql://... TURSO_AUTH_TOKEN=... APP_PASSWORD=secret PORT=3000 node build
 ```
 
-The database lives at `data/tracker.db` (or wherever `DATA_DIR` points). Back it up periodically — it's a single file.
+Without Turso env vars, it falls back to a local SQLite file at `data/tracker.db`.
 
 ### Environment variables
 
-| Variable | Required | Description |
-|---|---|---|
-| `APP_PASSWORD` | No | Shared password for login. If not set, no login required. |
-| `PORT` | No | Server port (default: 3000 in production, 5173 in dev) |
-| `DATA_DIR` | No | Directory for the database file (default: `./data`) |
+| Variable | Required | Default | Description |
+|---|---|---|---|
+| `TURSO_URL` | For production | — | Turso database URL |
+| `TURSO_AUTH_TOKEN` | For production | — | Turso auth token |
+| `APP_PASSWORD` | No | — | Shared password. If not set, no login required. |
+| `PORT` | No | 3000 | Server port |
+| `DATA_DIR` | No | `./data` | Local SQLite file directory (dev only) |
 
 ---
 
 ## Password protection
 
-Set the `APP_PASSWORD` environment variable to require a password:
-
 ```bash
 # Local testing
 APP_PASSWORD=labpass npm run dev
 
-# Production
-APP_PASSWORD=labpass node build
+# Production — set in Render dashboard or as env var
 ```
 
-No password set = no login screen (convenient for local development). Sessions last 30 days. A logout button is in the sidebar.
+No password set = no login screen. Sessions last 30 days. Logout button is in the sidebar.
 
 ---
 
@@ -92,61 +119,43 @@ No password set = no login screen (convenient for local development). Sessions l
 
 ### Projects
 
-Use the dropdown at the top of the sidebar to switch between projects or create new ones. Each project is completely isolated — its own aims, animals, milestones, protocols, log, and settings.
+The sidebar dropdown lets you switch between projects or create new ones. Each project has its own aims, animals, milestones, protocols, log, and settings — completely isolated.
 
 ### Aims & trajectories
 
-Go to **Settings** → **Aims** to define your project's aims. Each aim has a label, colour, description, tools, and a **stage trajectory** — the ordered list of stages an animal progresses through (e.g. Surgery → Recovery → Training → Expert → Done). These stages appear as the trajectory bar on the Animals page.
+**Settings** → **Aims**: define your project's aims. Each aim has a label, colour, description, tools, and a **stage trajectory** (the ordered list of stages an animal progresses through). Stages appear as the trajectory bar on the Animals page.
 
 ### Animals
 
-Register animals and assign them to an aim. The trajectory column shows their progression through the aim's stages. Click a row to edit. Stage changes are best logged via the **Transitions** page, which auto-updates the animal's current stage.
+Register animals and assign to an aim. The trajectory column shows progression. Stage changes are best logged via **Transitions**, which auto-updates the animal's current stage.
 
 ### Milestones & Gantt
 
-Each milestone **phase** has a name, colour, optional Gantt start/end months, optional Gantt sub-rows, and a checklist of items. Click items to cycle status (To do → In progress → Done → Blocked).
-
-Items marked as **milestone** with a **Gantt month** appear as diamonds on the Overview Gantt chart. Completed milestones turn green.
-
-To add a new phase, click **+ Add Phase** on the Milestones page. To reorder phases, use the ↑↓ buttons.
-
-### Gantt chart
-
-The Gantt on the Overview page is fully dynamic — it reads from milestone phases. Configure the timeline (start year, total months, current month) in **Settings** → **Gantt Timeline**.
+Each phase has a name, colour, optional Gantt month range, optional sub-rows, and a checklist. Click items to cycle status. Items marked as **milestone** with a **Gantt month** appear as diamonds on the Overview Gantt chart.
 
 ### Log (decisions & issues)
 
-A single unified log for both design decisions and issues/blockers. Each entry has a **kind** (decision or issue), which determines the available statuses and fields. Click the status badge to cycle it. Use filters to show only issues, only decisions, or by priority.
+Unified log with a `kind` field (decision or issue). Click status badges to cycle. Filters for kind, status, and priority.
 
 ### Protocols
 
-Each protocol has two sections: **steps** (rich text with markdown formatting) and a **checklist** (status-cycling items). You can add checklist items both during creation and after. Protocols can optionally be linked to an aim.
+Two sections per protocol: **steps** (rich text) and **checklist** (status-cycling items). Optionally linked to an aim.
 
 ### Calendar
 
-Aggregates deadlines from milestones (items with a calendar deadline), log entries (with deadlines), and custom events you create. The right panel shows upcoming items within 60 days.
+Aggregates deadlines from milestones, log entries, and custom events. Right panel shows upcoming items within 60 days.
 
 ### Rich text
 
-Anywhere you see the formatting toolbar (hypothesis, protocol steps, log descriptions), you can use:
-
-- **B** — bold (`**text**`)
-- *I* — italic (`*text*`)
-- `</>` — inline code
-- **H** / **h** — heading / sub-heading
-- **•** — bullet list
-- **A** — colour highlight (yellow, green, blue, red, purple)
-- **Preview** — toggle between editing and rendered view
-- **Ctrl+B** / **Ctrl+I** — keyboard shortcuts
+The formatting toolbar (hypothesis, protocol steps, log descriptions) supports:
+- **B** bold, *I* italic, `</>` code
+- **H** heading, **h** sub-heading, **•** bullet list
+- **A** colour highlights (yellow, green, blue, red, purple)
+- **Preview** toggle, **Ctrl+B** / **Ctrl+I** shortcuts
 
 ### Data management
 
-Go to **Settings** → **Data Management** to:
-
-- **Export** — download a JSON backup of all projects
-- **Import** — restore from a backup file
-- **Reset** — wipe the current project and re-seed with example data
-- **Delete** — remove the current project (if more than one exists)
+**Settings** → **Data Management**: export/import JSON backups, reset to example data, or delete a project.
 
 ---
 
@@ -154,9 +163,9 @@ Go to **Settings** → **Data Management** to:
 
 - **Frontend:** SvelteKit 2, Svelte 5
 - **Backend:** SvelteKit server routes (Node adapter)
-- **Database:** SQLite via better-sqlite3 (WAL mode)
+- **Database:** SQLite via [@libsql/client](https://github.com/tursodatabase/libsql-client-ts) — local file for dev, Turso cloud for production
 - **Deployment:** Render (or any Node.js host)
-- **No external CDN dependencies** — works fully offline once loaded
+- **No external CDN dependencies**
 
 ---
 
@@ -169,36 +178,36 @@ npm run preview   # preview production build locally
 node build        # run production server
 ```
 
-The database file (`data/tracker.db`) is gitignored. Delete it to re-seed from scratch.
+Delete `data/tracker.db` to re-seed from scratch.
 
 ### Project structure
 
 ```
 src/
   lib/
-    config.js           # seed data for new projects
-    stores.js           # reactive stores (project-scoped)
-    utils.js            # markdown renderer, helpers
-    server/db.js        # SQLite read/write
+    config.js              # seed data for new projects
+    stores.js              # reactive stores (project-scoped)
+    utils.js               # markdown renderer, helpers
+    server/db.js           # database layer (libsql)
     components/
-      Nav.svelte        # sidebar with project selector
-      Toast.svelte      # notification popups
-      MarkdownEditor.svelte  # rich text toolbar
+      Nav.svelte           # sidebar with project selector
+      Toast.svelte         # notifications
+      MarkdownEditor.svelte # rich text toolbar
   routes/
-    +layout.svelte      # root layout (nav + auth gate)
-    +page.svelte        # Overview (stats, hypothesis, Gantt)
-    animals/            # animal registry
-    transitions/        # stage change log
-    milestones/         # phase checklists + Gantt data
-    log/                # decisions & issues
-    protocols/          # procedures + equipment checklists
-    calendar/           # deadline aggregator
-    settings/           # project config, aims, data management
-    login/              # password gate
-    api/data/           # JSON read/write endpoint
-    api/auth/           # session cookie endpoint
+    +layout.svelte         # root layout (nav + auth gate)
+    +page.svelte           # Overview (stats, hypothesis, Gantt)
+    animals/               # animal registry
+    transitions/           # stage change log
+    milestones/            # phase checklists + Gantt data
+    log/                   # decisions & issues
+    protocols/             # procedures + checklists
+    calendar/              # deadline aggregator
+    settings/              # project config, aims, data mgmt
+    login/                 # password gate
+    api/data/              # data read/write endpoint
+    api/auth/              # session endpoint
 data/
-  tracker.db            # SQLite database (gitignored, auto-created)
+  tracker.db               # local SQLite (gitignored)
 ```
 
 ---
