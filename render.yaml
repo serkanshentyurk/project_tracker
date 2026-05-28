@@ -1,8 +1,7 @@
 services:
   - type: web
-    name: project-tracker
+    name: lab-tracker
     runtime: node
-    plan: free
     buildCommand: npm install && npm run build
     startCommand: node build
     envVars:
@@ -10,11 +9,9 @@ services:
         value: production
       - key: PORT
         value: "3000"
-      - key: DATA_DIR
-        value: /data
+      - key: TURSO_URL
+        sync: false  # set in Render dashboard
+      - key: TURSO_AUTH_TOKEN
+        sync: false  # set in Render dashboard
       - key: APP_PASSWORD
-        sync: false  # set manually in Render dashboard
-    disk:
-      name: tracker-data
-      mountPath: /data
-      sizeGB: 1
+        sync: false  # set in Render dashboard

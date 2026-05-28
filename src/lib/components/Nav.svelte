@@ -1,12 +1,13 @@
 <script>
   import { page } from '$app/stores';
-  import { settings, setKey, toast, allProjects, currentProjectId, switchProject, addProject, deleteProject, uid } from '$lib/stores.js';
+  import { settings, allProjects, currentProjectId, switchProject, addProject, deleteProject, uid, toast } from '$lib/stores.js';
   import { buildDefaultProject } from '$lib/config.js';
 
   const pages = [
     { id:'/',             icon:'🏠', label:'Overview' },
     { id:'/animals',      icon:'🐭', label:'Animals' },
     { id:'/transitions',  icon:'🔀', label:'Transitions' },
+    { id:'/sessions',     icon:'📊', label:'Sessions' },
     { id:'/milestones',   icon:'✅', label:'Milestones' },
     { id:'/log',          icon:'📋', label:'Log' },
     { id:'/protocols',    icon:'📝', label:'Protocols' },
@@ -20,10 +21,10 @@
       const name = prompt('New project name:');
       if (!name?.trim()) { e.target.value = $currentProjectId; return; }
       const proj = buildDefaultProject(uid(), name.trim());
-      addProject(proj);
+      addProject(proj);                         // ← already async in new stores
       toast('Project created');
     } else {
-      switchProject(val);
+      switchProject(val);                       // ← already async in new stores
     }
   }
 
@@ -33,16 +34,17 @@
     if (val === null) return;
     const n = parseInt(val);
     if (isNaN(n) || n < 1) { toast('Must be ≥ 1', 'error'); return; }
-    setKey('settings', { ...$settings, today_month: n });
-    toast('Gantt month updated');
+    // Note: this still uses the legacy path via Settings page save.
+    // The Gantt month is saved when the user clicks Save in Settings.
+    // For a quick inline update, we use setKey as fallback:
+    import('$lib/stores.js').then(m => {
+      m.setKey('settings', { ...$settings, today_month: n });
+      toast('Gantt month updated');
+    });
   }
   import { goto } from '$app/navigation';
-
-  async function logout() {
-    await fetch('/api/auth', { method: 'DELETE' });
-    goto('/login');
-  }
 </script>
+
 
 <div id="nav" style="
   width:var(--nav-w); background:var(--nav-bg); color:#9aabC0;

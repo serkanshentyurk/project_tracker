@@ -1,5 +1,5 @@
 <script>
-  import { log, setKey, toast, uid } from '$lib/stores.js';
+  import { log, saveLogEntry, removeLogEntry, toast, uid } from '$lib/stores.js';
   import { statusLabel, todayStr, renderMd } from '$lib/utils.js';
   import MarkdownEditor from '$lib/components/MarkdownEditor.svelte';
 
@@ -32,12 +32,11 @@
   $: decisions = all.filter(i => i.kind==='decision').length;
 
   function cycleStatus(id) {
-    const items = JSON.parse(JSON.stringify(all));
-    const item = items.find(x => x.id === id); if (!item) return;
+    const item = all.find(x => x.id === id); if (!item) return;
     const cycle = STATUS_CYCLES[item.kind] || ['open','resolved'];
-    item.status = cycle[(cycle.indexOf(item.status)+1) % cycle.length];
-    setKey('log', items);
-    toast(`Status: ${item.status}`);
+    const updated = { ...item, status: cycle[(cycle.indexOf(item.status)+1) % cycle.length] };
+    saveLogEntry(updated);                      // ← per-entity: upsert single entry
+    toast(`Status: ${updated.status}`);
   }
 
   function openModal(id) {
@@ -50,24 +49,22 @@
 
   function save() {
     if (!f.title?.trim()) { toast('Title required', 'error'); return; }
-    const items = JSON.parse(JSON.stringify(all));
     const entry = { ...f, id: f.id || uid() };
     if (entry.kind === 'decision') { entry.priority = null; }
-    const idx = items.findIndex(x => x.id === entry.id);
-    if (idx >= 0) items[idx] = entry; else items.push(entry);
-    setKey('log', items); modalOpen = false;
+    saveLogEntry(entry);                        // ← per-entity
+    modalOpen = false;
     toast(editingId ? 'Updated' : 'Added');
   }
 
   function del() {
     if (!editingId || !confirm('Delete this entry?')) return;
-    setKey('log', all.filter(x => x.id !== editingId));
+    removeLogEntry(editingId);                  // ← per-entity
     modalOpen = false; toast('Deleted', 'error');
   }
 </script>
 
 <div class="page-header">
-  <div><h1>Log</h1><div class="sub">Decisions and issues in one place. Click status badge to cycle.</div></div>
+  <div><h1>📋 Log</h1><div class="sub">Decisions and issues in one place. Click status badge to cycle.</div></div>
   <div class="header-actions"><button class="btn btn-primary" on:click={() => openModal()}>+ Add Entry</button></div>
 </div>
 

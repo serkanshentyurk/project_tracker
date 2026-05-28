@@ -1,5 +1,5 @@
 <script>
-  import { milestones, setKey, toast, uid } from '$lib/stores.js';
+  import { milestones, saveMilestones, toast, uid } from '$lib/stores.js';
   import { checkIcon, statusLabel } from '$lib/utils.js';
 
   const CYCLE = ['todo','inprog','done','blocked'];
@@ -25,7 +25,7 @@
     const item = ms[pi]?.items.find(i => i.id === itemId);
     if (!item) return;
     item.status = CYCLE[(CYCLE.indexOf(item.status)+1) % CYCLE.length];
-    setKey('milestones', ms);
+    saveMilestones(ms);                         // ← per-entity
     toast(item.status === 'done' ? '✓ Done' : item.status);
   }
 
@@ -33,7 +33,7 @@
     if (!confirm('Remove this item?')) return;
     const ms = JSON.parse(JSON.stringify(all));
     ms[pi].items = ms[pi].items.filter(i => i.id !== itemId);
-    setKey('milestones', ms);
+    saveMilestones(ms);                         // ← per-entity
     toast('Removed', 'error');
   }
 
@@ -48,41 +48,41 @@
     } else {
       pf = { label:'', color: COLORS[all.length % COLORS.length], gantt_start:'', gantt_end:'', gantt_rows:[] };
     }
-    newRowLabel = ''; newRowS = ''; newRowE = '';
+    newRowLabel=''; newRowS=''; newRowE='';
     phaseModalOpen = true;
   }
 
   function addGanttRow() {
     if (!newRowLabel.trim()) return;
-    pf.gantt_rows = [...pf.gantt_rows, { label: newRowLabel.trim(), s: parseInt(newRowS)||1, e: parseInt(newRowE)||1 }];
-    newRowLabel = ''; newRowS = ''; newRowE = '';
+    pf.gantt_rows = [...pf.gantt_rows, { label: newRowLabel.trim(), start: parseInt(newRowS)||1, end: parseInt(newRowE)||1 }];
+    newRowLabel=''; newRowS=''; newRowE='';
   }
 
   function removeGanttRow(i) { pf.gantt_rows = pf.gantt_rows.filter((_, j) => j !== i); }
 
   function savePhase() {
-    if (!pf.label.trim()) { toast('Phase name required', 'error'); return; }
+    if (!pf.label.trim()) { toast('Label required', 'error'); return; }
     const ms = JSON.parse(JSON.stringify(all));
-    const entry = {
-      phase: editingPhaseIdx != null ? ms[editingPhaseIdx].phase : 'phase_' + uid(),
+    const phase = {
+      phase: editingPhaseIdx != null ? ms[editingPhaseIdx].phase : uid(),
       label: pf.label.trim(), color: pf.color,
       gantt_start: parseInt(pf.gantt_start) || null,
       gantt_end: parseInt(pf.gantt_end) || null,
       gantt_rows: pf.gantt_rows,
       items: editingPhaseIdx != null ? ms[editingPhaseIdx].items : [],
     };
-    if (editingPhaseIdx != null) ms[editingPhaseIdx] = entry; else ms.push(entry);
-    setKey('milestones', ms);
+    if (editingPhaseIdx != null) ms[editingPhaseIdx] = phase;
+    else ms.push(phase);
+    saveMilestones(ms);                         // ← per-entity
     phaseModalOpen = false;
     toast(editingPhaseIdx != null ? 'Phase updated' : 'Phase added');
   }
 
   function deletePhase(idx) {
-    const p = all[idx];
-    if (!confirm(`Delete "${p.label}" and all its ${p.items.length} items?`)) return;
+    if (!confirm(`Delete phase "${all[idx]?.label}" and all its items?`)) return;
     const ms = JSON.parse(JSON.stringify(all));
     ms.splice(idx, 1);
-    setKey('milestones', ms);
+    saveMilestones(ms);                         // ← per-entity
     toast('Phase deleted', 'error');
   }
 
@@ -91,33 +91,32 @@
     const ni = idx + dir;
     if (ni < 0 || ni >= ms.length) return;
     [ms[idx], ms[ni]] = [ms[ni], ms[idx]];
-    setKey('milestones', ms);
+    saveMilestones(ms);                         // ← per-entity
   }
 
-  // ── Item modal ───────────────────────────────────────────────
-  function openItemModal(pi) {
-    itemPhaseIdx = pi;
+  // ── Item add ─────────────────────────────────────────────────
+  function openItemModal(phaseIdx) {
+    itemPhaseIdx = phaseIdx;
     itemText = ''; itemDeadline = ''; itemMilestone = false; itemDeadlineMonth = '';
     itemModalOpen = true;
   }
 
   function addItem() {
-    if (!itemText.trim()) { toast('Enter text', 'error'); return; }
+    if (!itemText.trim()) return;
     const ms = JSON.parse(JSON.stringify(all));
     ms[itemPhaseIdx].items.push({
       id: uid(), text: itemText.trim(), status: 'todo',
-      milestone: itemMilestone,
-      deadline: itemDeadline || null,
+      milestone: itemMilestone, deadline: itemDeadline || null,
       deadline_month: parseInt(itemDeadlineMonth) || null,
     });
-    setKey('milestones', ms);
+    saveMilestones(ms);                         // ← per-entity
     itemModalOpen = false;
     toast('Item added');
   }
 </script>
 
 <div class="page-header">
-  <div><h1>Milestones</h1><div class="sub">Click items to cycle status. Phases drive the Gantt on Overview.</div></div>
+  <div><h1>✅ Milestones</h1><div class="sub">Click items to cycle status. Phases drive the Gantt on Overview.</div></div>
   <div class="header-actions">
     <button class="btn btn-secondary" on:click={() => openPhaseModal()}>+ Add Phase</button>
   </div>

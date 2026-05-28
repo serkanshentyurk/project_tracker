@@ -1,5 +1,5 @@
 <script>
-  import { protocols, aims, setKey, toast, uid } from '$lib/stores.js';
+  import { protocols, aims, saveProtocol, removeProtocol, saveProtocolById, toast, uid } from '$lib/stores.js';
   import { renderMd, checkIcon, statusLabel } from '$lib/utils.js';
   import MarkdownEditor from '$lib/components/MarkdownEditor.svelte';
 
@@ -19,7 +19,8 @@
     const p = ps.find(x => x._id === protoId);
     const item = p?.items.find(i => i.id === itemId); if (!item) return;
     item.status = CYCLE[(CYCLE.indexOf(item.status)+1) % CYCLE.length];
-    setKey('protocols', ps);
+    // Save just this protocol
+    saveProtocol(p);                            // ← per-entity
     toast(item.status === 'done' ? '✓ Done' : item.status);
   }
 
@@ -28,7 +29,8 @@
     const ps = JSON.parse(JSON.stringify(all));
     const p = ps.find(x => x._id === protoId); if (!p) return;
     p.items = p.items.filter(i => i.id !== itemId);
-    setKey('protocols', ps); toast('Removed', 'error');
+    saveProtocol(p);                            // ← per-entity
+    toast('Removed', 'error');
   }
 
   function addItemToExisting(protoId) {
@@ -37,7 +39,8 @@
     const ps = JSON.parse(JSON.stringify(all));
     const p = ps.find(x => x._id === protoId); if (!p) return;
     p.items.push({ id: uid(), text: text.trim(), status: 'todo' });
-    setKey('protocols', ps); toast('Item added');
+    saveProtocol(p);                            // ← per-entity
+    toast('Item added');
   }
 
   function openProtoModal(id) {
@@ -54,29 +57,26 @@
     newItemText = '';
   }
 
-  function removeModalItem(id) {
-    f.items = f.items.filter(i => i.id !== id);
-  }
+  function removeModalItem(id) { f.items = f.items.filter(i => i.id !== id); }
 
   function save() {
     if (!f.title?.trim()) { toast('Title required', 'error'); return; }
-    const ps = JSON.parse(JSON.stringify(all));
     const entry = { ...f, _id: f._id || uid() };
-    const idx = ps.findIndex(p => p._id === entry._id);
-    if (idx >= 0) ps[idx] = entry; else ps.push(entry);
-    setKey('protocols', ps); modalOpen = false;
+    saveProtocol(entry);                        // ← per-entity
+    modalOpen = false;
     toast(editingId ? 'Updated' : 'Protocol added');
   }
 
   function del() {
     if (!editingId || !confirm('Delete this protocol?')) return;
-    setKey('protocols', all.filter(p => p._id !== editingId));
+    removeProtocol(editingId);                  // ← per-entity
     modalOpen = false; toast('Deleted', 'error');
   }
 </script>
 
+
 <div class="page-header">
-  <div><h1>Protocols</h1><div class="sub">Each protocol bundles a checklist + step-by-step procedure. Click to expand.</div></div>
+  <div><h1>📝 Protocols</h1><div class="sub">Each protocol bundles a checklist + step-by-step procedure. Click to expand.</div></div>
   <div class="header-actions"><button class="btn btn-primary" on:click={() => openProtoModal()}>+ Add Protocol</button></div>
 </div>
 

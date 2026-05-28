@@ -1,6 +1,10 @@
 <script>
   import { animals, sessions, milestones, log, settings, currentProject, aims } from '$lib/stores.js';
   import { renderMd } from '$lib/utils.js';
+  import { goto } from '$app/navigation';
+  import { data } from '$lib/stores.js';
+  import { flagsForLatestSession, worstLevel, levelColour } from '$lib/flags.js';
+  import { todayStr } from '$lib/utils.js';
 
   $: animalList = $animals;
   $: aimEntries = Object.entries($aims || {});
@@ -15,14 +19,33 @@
   $: yearCount = Math.ceil(ganttTotal / 12);
   $: years = Array.from({length: yearCount}, (_, i) => startYear + i);
   $: ganttPhases = ($milestones || []).filter(p => p.gantt_start && p.gantt_end);
+  $: sessionData = (() => {
+    const d = $data;
+    if (!d) return [];
+    const proj = d.projects?.find(p => p._id === d.currentProject);
+    return proj?.session_data || [];
+  })();
 
-  function pct(m) { return ((m-1)/ganttTotal*100).toFixed(2)+'%'; }
-  function w(s,e) { return ((e-s+1)/ganttTotal*100).toFixed(2)+'%'; }
+  $: ranToday = (() => {
+    const today = todayStr();
+    return new Set(sessionData.filter(s => s.date === today).map(s => s.animal_id)).size;
+  })();
+
+  $: flaggedAnimals = $animals
+    .map(a => {
+      const mine = sessionData.filter(s => s.animal_id === a.track_id || s.animal_id === a._id);
+      const flags = flagsForLatestSession(mine);
+      return { animal: a, flags, level: worstLevel(flags) };
+    })
+    .filter(x => x.level)
+    .sort((a, b) => (a.level === 'danger' ? -1 : 1) - (b.level === 'danger' ? -1 : 1));
+    function pct(m) { return ((m-1)/ganttTotal*100).toFixed(2)+'%'; }
+    function w(s,e) { return ((e-s+1)/ganttTotal*100).toFixed(2)+'%'; }
 </script>
 
 <div class="page-header">
   <div>
-    <h1>Overview</h1>
+    <h1>🏠 Overview</h1>
     <div class="sub">{$settings.project_full || $currentProject?.name || ''}{$settings.supervisor ? ` · Supervisor: ${$settings.supervisor}` : ''}</div>
   </div>
 </div>
@@ -36,9 +59,35 @@
     <div class="stat-box"><div class="val">{openIssues}</div><div class="lbl">Open issues</div></div>
   </div>
 
+  <div class="card" style="margin-bottom:16px">
+    <div class="card-title">📌 Needs attention</div>
+    <div class="text-sm text-muted" style="margin-bottom:10px">
+      {ranToday} animal{ranToday === 1 ? '' : 's'} ran today ·
+      {flaggedAnimals.length} flagged on latest session
+    </div>
+    {#if flaggedAnimals.length === 0}
+      <div class="text-sm" style="color:var(--success)">✓ No animals flagged.</div>
+    {:else}
+      <div style="display:flex;flex-direction:column;gap:6px">
+        {#each flaggedAnimals as fa}
+          <div class="clickable" on:click={() => goto(`/animals/${fa.animal._id}`)}
+            style="display:flex;align-items:center;gap:10px;padding:6px 8px;border-radius:6px;border:1px solid var(--border)">
+            <span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:{levelColour(fa.level)}"></span>
+            <strong style="min-width:70px">{fa.animal.track_id || fa.animal._id}</strong>
+            <span class="text-xs">
+              {#each fa.flags as fl}
+                <span style="display:inline-block;padding:1px 6px;border-radius:8px;margin:1px;background:{levelColour(fl.level)}22;color:{levelColour(fl.level)};font-weight:600">{fl.msg}</span>
+              {/each}
+            </span>
+          </div>
+        {/each}
+      </div>
+    {/if}
+  </div>
+
   <!-- Hypothesis -->
   <div class="card" style="margin-bottom:16px">
-    <div class="card-title">Core Hypothesis</div>
+    <div class="card-title">🧠 Core Hypothesis</div>
     <div style="font-size:.88rem;line-height:1.7">
       {#if $settings.hypothesis}
         {@html renderMd($settings.hypothesis)}
@@ -72,7 +121,7 @@
   <!-- Dynamic Gantt -->
   {#if ganttPhases.length > 0}
   <div class="card">
-    <div class="card-title">Phase Timeline ({startYear} – {startYear + yearCount - 1})</div>
+    <div class="card-title">📅 Phase Timeline ({startYear} – {startYear + yearCount - 1})</div>
     <div class="gantt-wrap"><div class="gantt">
       <div class="gantt-year-row">
         {#each years as yr}<div class="gantt-yr" style="flex:{12/ganttTotal}">&nbsp;{yr}</div>{/each}
@@ -118,7 +167,7 @@
     <p class="text-xs text-muted" style="margin-top:8px">Red line = month {todayM}. Phases managed on <a href="/milestones">Milestones</a>. Gantt settings in <a href="/settings">Settings</a>.</p>
   </div>
   {:else}
-    <div class="card"><div class="card-title">Phase Timeline</div>
+    <div class="card"><div class="card-title">📅 Phase Timeline</div>
       <p class="text-muted text-sm">No phases with Gantt dates yet. Add them on <a href="/milestones">Milestones</a>.</p>
     </div>
   {/if}

@@ -1,5 +1,5 @@
 <script>
-  import { animals, sessions, aims, trajectories, setKey, toast, uid } from '$lib/stores.js';
+  import { animals, sessions, aims, trajectories, saveTransition, removeTransition, saveAnimal, toast, uid } from '$lib/stores.js';
   import { todayStr } from '$lib/utils.js';
 
   let aimFilter = 'all', modalOpen = false, editingId = null;
@@ -44,15 +44,13 @@
       stage_from: editingId ? f.stage_from : (animal?.current_stage || null),
       stage_to: f.stage_to, notes: f.notes?.trim() || '',
     };
-    const list = [...$sessions];
-    const idx = list.findIndex(s => s._id === entry._id);
-    if (idx >= 0) list[idx] = entry; else list.push(entry);
-    setKey('sessions', list);
+    saveTransition(entry);                      // ← per-entity
+
+    // Also update animal's current_stage
     if (!editingId && animal) {
-      const updated = { ...animal, current_stage: f.stage_to, stage_dates: { ...(animal.stage_dates||{}), [f.stage_to]: f.date }};
-      const aList = [...$animals]; const ai = aList.findIndex(a => a._id === animal._id);
-      if (ai >= 0) aList[ai] = updated;
-      setKey('animals', aList);
+      const updated = { ...animal, current_stage: f.stage_to,
+        stage_dates: { ...(animal.stage_dates||{}), [f.stage_to]: f.date }};
+      saveAnimal(updated);                      // ← per-entity
     }
     modalOpen = false;
     toast(editingId ? 'Updated' : `${getLabel(f.animal_id)} → ${f.stage_to}`);
@@ -60,13 +58,13 @@
 
   function del() {
     if (!editingId || !confirm('Delete this entry?')) return;
-    setKey('sessions', $sessions.filter(s => s._id !== editingId));
+    removeTransition(editingId);                // ← per-entity
     modalOpen = false; toast('Deleted', 'error');
   }
 </script>
 
 <div class="page-header">
-  <div><h1>Transitions</h1><div class="sub">Log key stage transitions. Auto-updates animal's current stage.</div></div>
+  <div><h1>🔀 Transitions</h1><div class="sub">Log key stage transitions. Auto-updates animal's current stage.</div></div>
   <div class="header-actions"><button class="btn btn-primary" on:click={() => openModal()}>+ Log Transition</button></div>
 </div>
 
@@ -86,7 +84,7 @@
   </div>
 
   {#if filtered.length === 0}
-    <div class="empty-state">No transitions logged yet.</div>
+    <div class="empty-state"><div class="icon">🔀</div>No transitions logged yet.</div>
   {:else}
     <div class="card" style="padding:0;overflow:hidden">
       <div class="table-wrap" style="border:none;border-radius:0">

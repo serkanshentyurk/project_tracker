@@ -1,5 +1,10 @@
 <script>
-  import { settings, aims, trajectories, setKey, toast, data, loaded, currentProject, allProjects, deleteProject, uid } from '$lib/stores.js';
+  import {
+    settings, aims, trajectories, data, loaded, currentProject, allProjects,
+    saveSettings, deleteProject, toast, uid,
+  } from '$lib/stores.js';
+  // Alias to avoid collision with local functions that the template calls
+  import { saveAim as _apiSaveAim, removeAim as _apiRemoveAim, resetProject as _apiResetProject } from '$lib/stores.js';
   import { buildDefaultProject, buildExampleProject } from '$lib/config.js';
   import { renderMd } from '$lib/utils.js';
   import MarkdownEditor from '$lib/components/MarkdownEditor.svelte';
@@ -31,18 +36,12 @@
 
   function save() {
     const { _init, ...rest } = s;
-    setKey('settings', rest);
-    if (projName.trim() !== $currentProject.name) {
-      data.update(d => {
-        const p = d.projects.find(x => x._id === d.currentProject);
-        if (p) p.name = projName.trim();
-        return d;
-      });
-    }
+    const nameChanged = projName.trim() !== $currentProject.name;
+    saveSettings(rest, nameChanged ? projName.trim() : undefined);
     toast('Settings saved');
   }
 
-  // ── Aim CRUD ─────────────────────────────────────────────
+  // ── Aim CRUD — names match template handlers ───────────────
   function openAimModal(aimId) {
     editingAimId = aimId || null;
     if (aimId && $aims[aimId]) {
@@ -70,18 +69,14 @@
   function saveAim() {
     if (!af.label.trim()) { toast('Label required', 'error'); return; }
     const aimId = editingAimId || ('A' + (aimEntries.length + 1));
-    const newAims = JSON.parse(JSON.stringify($aims || {}));
-    newAims[aimId] = {
+    const aim = {
       label: af.label.trim(),
       title: af.title.trim(),
       description: af.description.trim(),
       color: af.color,
       tools: af.tools.split(',').map(t => t.trim()).filter(Boolean),
     };
-    setKey('aims', newAims);
-    const newTraj = JSON.parse(JSON.stringify($trajectories || {}));
-    newTraj[aimId] = trajStages;
-    setKey('trajectories', newTraj);
+    _apiSaveAim(aimId, aim, trajStages);
     aimModalOpen = false;
     toast(editingAimId ? 'Aim updated' : 'Aim added');
   }
@@ -93,12 +88,7 @@
     } else {
       if (!confirm(`Delete aim "${$aims[aimId]?.label}"?`)) return;
     }
-    const newAims = JSON.parse(JSON.stringify($aims || {}));
-    delete newAims[aimId];
-    setKey('aims', newAims);
-    const newTraj = JSON.parse(JSON.stringify($trajectories || {}));
-    delete newTraj[aimId];
-    setKey('trajectories', newTraj);
+    _apiRemoveAim(aimId);
     toast('Aim deleted', 'error');
   }
 
@@ -116,9 +106,8 @@
     const fresh = buildExampleProject();
     fresh._id = $currentProject._id;
     fresh.name = projName || 'Example Study';
-    data.update(d => { const idx = d.projects.findIndex(p => p._id === d.currentProject); if (idx >= 0) d.projects[idx] = fresh; return d; });
+    _apiResetProject(fresh);
     s = { ...fresh.settings, _init: true };
-    fetch('/api/data', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify($data) });
     toast('Reset to defaults');
   }
 
@@ -144,7 +133,7 @@
 </script>
 
 <div class="page-header">
-  <div><h1>Settings</h1><div class="sub">Project settings, aims, texts, and data management.</div></div>
+  <div><h1>⚙️ Settings</h1><div class="sub">Project settings, aims, texts, and data management.</div></div>
 </div>
 
 <div class="content" style="max-width:800px">
@@ -161,6 +150,16 @@
     </div>
   </div>
 
+  <!-- Data paths -->
+  <div class="settings-section">
+    <h3>Data Paths</h3>
+    <p class="text-xs text-muted mb-3">Used by the Sessions page to scan for processed session data. Set to the folder containing animal subfolders with session_stats JSON files.</p>
+    <div class="form-group" style="margin-bottom:14px">
+      <label>Processed data directory</label>
+      <input bind:value={s.processed_data_dir} placeholder="e.g. Z:\Serkan\Head_Fixed_Behavior\Data\Processed" style="font-family:'SF Mono','Fira Code',monospace;font-size:.82rem">
+    </div>
+  </div>
+
   <!-- Aims -->
   <div class="settings-section">
     <h3>Aims</h3>
@@ -173,7 +172,7 @@
           {#if ($trajectories||{})[id]?.length}<div class="text-xs text-muted" style="margin-top:2px">{($trajectories||{})[id].length} stages defined</div>{/if}
         </div>
         <button class="btn btn-secondary btn-sm" on:click={() => openAimModal(id)}>Edit</button>
-        <button class="btn btn-danger btn-sm" on:click={() => deleteAim(id)}>✕</button>
+        <button class="btn btn-danger btn-sm" on:click={() => deleteAimFn(id)}>✕</button>
       </div>
     {/each}
     {#if aimEntries.length === 0}
@@ -207,7 +206,7 @@
     <div style="display:flex;gap:10px;flex-wrap:wrap">
       <button class="btn btn-secondary" on:click={exportJSON}>⬇ Export</button>
       <label class="btn btn-secondary" style="cursor:pointer">⬆ Import<input type="file" accept=".json" style="display:none" on:change={importJSON}></label>
-      <button class="btn btn-danger" on:click={resetProject}>↻ Reset project</button>
+      <button class="btn btn-danger" on:click={resetProjectFn}>↻ Reset project</button>
       {#if $allProjects.length > 1}<button class="btn btn-danger" on:click={delProject}>🗑 Delete project</button>{/if}
     </div>
   </div>
@@ -257,7 +256,7 @@
     </div>
     <div class="modal-footer">
       <button class="btn btn-secondary" on:click={() => aimModalOpen=false}>Cancel</button>
-      <button class="btn btn-primary" on:click={saveAim}>Save</button>
+      <button class="btn btn-primary" on:click={saveAimFn}>Save</button>
     </div>
   </div>
 </div>

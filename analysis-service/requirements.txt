@@ -1,0 +1,11 @@
+fastapi>=0.104
+uvicorn[standard]>=0.24
+python-multipart>=0.0.6
+
+# behav_utils dependencies (also needed directly)
+numpy>=1.24
+scipy>=1.10
+pandas>=2.0
+matplotlib>=3.7
+scikit-learn>=1.2
+pyyaml>=6.0

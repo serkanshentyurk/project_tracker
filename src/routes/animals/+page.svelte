@@ -1,6 +1,9 @@
 <script>
-  import { animals, aims, trajectories, setKey, toast, uid } from '$lib/stores.js';
-
+  import { animals, aims, trajectories, saveAnimal, removeAnimal, toast, uid } from '$lib/stores.js';
+  import { goto } from '$app/navigation';
+  import { data } from '$lib/stores.js';
+  import { flagsForLatestSession, worstLevel, levelColour } from '$lib/flags.js';
+  
   let aimFilter = 'all';
   let modalOpen = false;
   let editingId = null;
@@ -12,6 +15,17 @@
   $: grouped = aimFilter === 'all'
     ? aimIds.map(id => ({ id, animals: $animals.filter(a => a.aim === id) }))
     : [{ id: aimFilter, animals: filtered }];
+  $: sessionData = (() => {
+    const d = $data;
+    if (!d) return [];
+    const proj = d.projects?.find(p => p._id === d.currentProject);
+    return proj?.session_data || [];
+  })();
+
+  function animalFlagLevel(a) {
+    const mine = sessionData.filter(s => s.animal_id === a.track_id || s.animal_id === a._id);
+    return worstLevel(flagsForLatestSession(mine));
+  }
 
   function stages(aim) { return ($trajectories || {})[aim] || []; }
 
@@ -28,17 +42,14 @@
   function save() {
     if (!f.track_id?.trim()) { toast('ID required', 'error'); return; }
     const entry = { ...f, _id: f._id || uid() };
-    const list = [...$animals];
-    const idx = list.findIndex(a => a._id === entry._id);
-    if (idx >= 0) list[idx] = entry; else list.push(entry);
-    setKey('animals', list);
+    saveAnimal(entry);                          // ← per-entity
     modalOpen = false;
     toast(editingId ? 'Animal updated' : 'Animal added');
   }
 
   function del() {
     if (!editingId || !confirm('Delete this animal and all its sessions?')) return;
-    setKey('animals', $animals.filter(a => a._id !== editingId));
+    removeAnimal(editingId);                    // ← per-entity
     modalOpen = false;
     toast('Deleted', 'error');
   }
@@ -51,7 +62,7 @@
 </script>
 
 <div class="page-header">
-  <div><h1>Animals</h1><div class="sub">Click a row to edit. Grouped by aim.</div></div>
+  <div><h1>🐭 Animals</h1><div class="sub">Click a row to edit. Grouped by aim.</div></div>
   <div class="header-actions"><button class="btn btn-primary" on:click={() => openModal()}>+ Add Animal</button></div>
 </div>
 
@@ -82,15 +93,22 @@
         <span class="text-xs text-muted">{g.animals.length} registered</span>
       </div>
       {#if g.animals.length === 0}
-        <div class="empty-state" style="padding:30px">No animals yet</div>
+        <div class="empty-state" style="padding:30px"><div class="icon">🐭</div>No animals yet</div>
       {:else}
         <div class="table-wrap" style="border:none;border-radius:0">
           <table>
             <thead><tr><th>ID</th><th>Lab ID</th><th>Sex</th><th>Stage</th><th>Trajectory</th><th>Notes</th></tr></thead>
             <tbody>
               {#each g.animals as a}
-                <tr class="clickable" on:click={() => openModal(a._id)}>
-                  <td><strong>{a.track_id || a._id}</strong></td>
+                <tr class="clickable" on:click={() => goto(`/animals/${a._id}`)}>
+                  <td>
+                    {#if animalFlagLevel(a)}
+                      <span title="needs attention" style="display:inline-block;width:8px;height:8px;border-radius:50%;background:{levelColour(animalFlagLevel(a))};margin-right:6px"></span>
+                    {/if}
+                    <strong>{a.track_id || a._id}</strong>
+                    <button class="btn btn-secondary btn-sm" style="margin-left:8px;padding:1px 6px"
+                      on:click|stopPropagation={() => openModal(a._id)}>edit</button>
+                  </td>
                   <td>{a.lab_id || '—'}</td>
                   <td>{a.sex || '—'}</td>
                   <td>{#if a.current_stage}<code>{a.current_stage}</code>{:else}<span class="text-muted">—</span>{/if}</td>

@@ -30,8 +30,8 @@ Each lab deploys their own instance. No shared infrastructure, no third-party ac
 Requires [Node.js](https://nodejs.org/) 20 or later.
 
 ```bash
-git clone https://github.com/serkanshentyurk/project_tracker.git
-cd project_tracker
+git clone https://github.com/YOUR_USERNAME/lab-tracker.git
+cd lab-tracker
 npm install
 npm run dev
 ```
@@ -40,7 +40,7 @@ Open [http://localhost:5173](http://localhost:5173). A local SQLite database (`d
 
 ---
 
-## Deploying 
+## Deploying for your lab
 
 ### 1. Create a Turso database (free)
 
@@ -54,14 +54,14 @@ curl -sSfL https://get.tur.so/install.sh | bash
 turso auth signup    # or: turso auth login
 
 # Create a database
-turso db create project-tracker
+turso db create lab-tracker
 
 # Get the connection URL
-turso db show project-tracker --url
-# → libsql://project-tracker-yourname.turso.io
+turso db show lab-tracker --url
+# → libsql://lab-tracker-yourname.turso.io
 
 # Create an auth token
-turso db tokens create project-tracker
+turso db tokens create lab-tracker
 # → eyJhbGci...
 ```
 
@@ -73,7 +73,7 @@ Save the URL and token — you'll need them in the next step.
 2. Go to [render.com](https://render.com) → **New** → **Blueprint**
 3. Connect your repo — Render reads `render.yaml` and creates the service
 4. In the Render dashboard, go to **Environment** and set:
-   - `TURSO_URL` → the URL from step 1 (e.g. `libsql://project-tracker-yourname.turso.io`)
+   - `TURSO_URL` → the URL from step 1 (e.g. `libsql://lab-tracker-yourname.turso.io`)
    - `TURSO_AUTH_TOKEN` → the token from step 1
    - `APP_PASSWORD` → a shared password for your lab (optional)
 5. Redeploy — your tracker is live

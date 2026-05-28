@@ -1,5 +1,5 @@
 <script>
-  import { milestones, log, events, sessions, animals, setKey, toast, uid } from '$lib/stores.js';
+  import { milestones, log, events, sessions, animals, saveEvent, removeEvent, toast, uid } from '$lib/stores.js';
   import { statusLabel, daysFromToday, todayStr } from '$lib/utils.js';
 
   const TODAY = new Date(); TODAY.setHours(0,0,0,0);
@@ -66,19 +66,17 @@
     addModalOpen = true;
   }
 
-  function saveEvent() {
+  function saveEventFn() {
     if (!af.title?.trim() || !af.date) { toast('Title and date required', 'error'); return; }
-    const evts = [...($events||[])];
     const entry = { ...af, _id: af._id || uid() };
-    const idx = evts.findIndex(e => e._id === entry._id);
-    if (idx >= 0) evts[idx] = entry; else evts.push(entry);
-    setKey('events', evts); addModalOpen = false;
+    saveEvent(entry);                           // ← per-entity
+    addModalOpen = false;
     toast(editingEventId ? 'Updated' : 'Event added');
   }
 
-  function deleteEvent() {
+  function deleteEventFn() {
     if (!editingEventId || !confirm('Delete?')) return;
-    setKey('events', ($events||[]).filter(e => e._id !== editingEventId));
+    removeEvent(editingEventId);                // ← per-entity
     addModalOpen = false; toast('Deleted', 'error');
   }
 
@@ -90,8 +88,9 @@
   }
 </script>
 
+
 <div class="page-header">
-  <div><h1>Calendar</h1><div class="sub">Deadlines from milestones, log entries, and custom events.</div></div>
+  <div><h1>📅 Calendar</h1><div class="sub">Deadlines from milestones, log entries, and custom events.</div></div>
   <div class="header-actions"><button class="btn btn-primary" on:click={() => openAdd()}>+ Add Event</button></div>
 </div>
 
@@ -129,7 +128,7 @@
 
     <div>
       <div class="card" style="padding:0;overflow:hidden">
-        <div style="padding:12px 14px;border-bottom:1px solid var(--border);font-weight:700;font-size:.88rem">Upcoming (60 days)</div>
+        <div style="padding:12px 14px;border-bottom:1px solid var(--border);font-weight:700;font-size:.88rem">⏰ Upcoming (60 days)</div>
         {#if upcoming.length === 0}
           <div style="padding:20px;text-align:center;color:var(--muted);font-size:.84rem">No deadlines in the next 60 days.</div>
         {:else}
@@ -171,9 +170,9 @@
       <div class="form-group"><label>Notes</label><textarea bind:value={af.notes} rows="2"></textarea></div>
     </div>
     <div class="modal-footer">
-      {#if editingEventId}<button class="btn btn-danger btn-sm" style="margin-right:auto" on:click={deleteEvent}>Delete</button>{/if}
+      {#if editingEventId}<button class="btn btn-danger btn-sm" style="margin-right:auto" on:click={deleteEventFn}>Delete</button>{/if}
       <button class="btn btn-secondary" on:click={() => addModalOpen=false}>Cancel</button>
-      <button class="btn btn-primary" on:click={saveEvent}>Save</button>
+      <button class="btn btn-primary" on:click={saveEventFn}>Save</button>
     </div>
   </div>
 </div>
