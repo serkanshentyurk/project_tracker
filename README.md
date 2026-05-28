@@ -1,216 +1,246 @@
-# Lab Tracker
+# Project Tracker
 
-A self-hosted project management app built for research labs. Track animals, experiments, milestones, protocols, and decisions — all from one place.
+A web application for managing lab animal training pipelines, behavioural
+performance data, experimental milestones, and research projects. Built
+for head-fixed auditory two-alternative forced-choice (2AFC) psychophysics
+experiments in mice.
 
-Each lab deploys their own instance. No shared infrastructure, no third-party accounts required.
+It does two things:
 
-![SvelteKit](https://img.shields.io/badge/SvelteKit-2-orange) ![SQLite](https://img.shields.io/badge/SQLite-Turso-blue) ![License](https://img.shields.io/badge/license-MIT-green)
+1. **Tracks the project** — animals, training stages, milestones,
+   protocols, a log, and a calendar, all per research project.
+2. **Ingests and visualises behaviour** — scans raw Bonsai CSV output,
+   runs it through the `behav_utils` analysis package, and stores
+   per-session metrics (accuracy, psychometric fits, update matrices,
+   reaction times, history weights, etc.) for browsing and plotting.
+
+![License](https://img.shields.io/badge/license-MIT-green)
+---
+
+## Stack
+
+- **Frontend / server**: SvelteKit (Node adapter)
+- **Database**: PostgreSQL (normalised, ~15 tables)
+- **Analysis service**: FastAPI wrapping `behav_utils`, on port 8100
+- **Analysis package**: `behav_utils` (raw Bonsai CSV processing)
+
+The web app and the analysis service are two separate processes that
+talk over HTTP. The web app reads/writes PostgreSQL; when you trigger a
+scan, it calls the analysis service, which reads raw CSVs and returns
+computed metrics.
+
+```
+  Browser ──▶ SvelteKit (5173) ──▶ PostgreSQL
+                   │
+                   └──HTTP scan──▶ Analysis service (8100) ──▶ behav_utils ──▶ raw CSVs
+```
 
 ---
 
-## Features
+## Prerequisites
 
-- **Multi-project** — switch between projects from the sidebar; each has its own data, aims, and settings
-- **Animals** — register animals, assign to aims, track progression through custom stage trajectories
-- **Transitions** — log key stage changes; auto-updates the animal's current stage
-- **Milestones** — phase-grouped checklists with Gantt chart integration; add/edit/reorder/delete phases
-- **Log** — decisions and issues in one place; filter by kind, status, and priority
-- **Protocols** — step-by-step procedures (rendered from markdown) with equipment checklists
-- **Calendar** — aggregates deadlines from milestones, log entries, and custom events
-- **Settings** — everything is editable: project name, aims (with stage trajectories), hypothesis text, Gantt timeline
-- **Dynamic Gantt** — generated from milestone phases; milestone diamonds come from checklist items
-- **Rich text editing** — toolbar with bold, italic, headings, lists, code, and colour highlights; live preview
-- **Password protection** — optional shared password via environment variable
-- **SQLite** — local file for development, [Turso](https://turso.tech) cloud for production (free tier)
+- Node.js 18+
+- PostgreSQL 14+ (16 also fine)
+- Python 3.10+ (for the analysis service)
 
 ---
 
-## Quick start (local development)
+## Quick start
 
-Requires [Node.js](https://nodejs.org/) 20 or later.
+### 1. Database
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/lab-tracker.git
-cd lab-tracker
+createdb tracker
+export DATABASE_URL="postgres://localhost:5432/tracker"
+psql "$DATABASE_URL" < schema.sql
+```
+
+Add the `DATABASE_URL` line to your `~/.zshrc` (or `~/.bashrc`) so it
+persists across terminals.
+
+### 2. Web app
+
+```bash
 npm install
 npm run dev
 ```
 
-Open [http://localhost:5173](http://localhost:5173). A local SQLite database (`data/tracker.db`) is created automatically with an example project. No Turso account needed for local development.
+Open the URL it prints (default http://localhost:5173). On first run
+with an empty database it creates an example project.
 
----
-
-## Deploying for your lab
-
-### 1. Create a Turso database (free)
-
-[Turso](https://turso.tech) hosts your SQLite database in the cloud. Free tier includes 9 GB storage and 500 databases.
+### 3. Analysis service (for scanning raw CSVs)
 
 ```bash
-# Install Turso CLI
-curl -sSfL https://get.tur.so/install.sh | bash
-
-# Sign up / log in
-turso auth signup    # or: turso auth login
-
-# Create a database
-turso db create lab-tracker
-
-# Get the connection URL
-turso db show lab-tracker --url
-# → libsql://lab-tracker-yourname.turso.io
-
-# Create an auth token
-turso db tokens create lab-tracker
-# → eyJhbGci...
+cd analysis-service
+python3 -m venv .venv
+.venv/bin/pip install -r requirements.txt
+.venv/bin/python -m uvicorn app:app --host 0.0.0.0 --port 8100 --reload
 ```
 
-Save the URL and token — you'll need them in the next step.
+**Always launch uvicorn with `.venv/bin/python -m uvicorn ...`** — using
+a bare `uvicorn` may pick up a different Python environment that lacks
+the dependencies.
 
-### 2. Deploy to Render
-
-1. Fork or clone this repo to your own GitHub account
-2. Go to [render.com](https://render.com) → **New** → **Blueprint**
-3. Connect your repo — Render reads `render.yaml` and creates the service
-4. In the Render dashboard, go to **Environment** and set:
-   - `TURSO_URL` → the URL from step 1 (e.g. `libsql://lab-tracker-yourname.turso.io`)
-   - `TURSO_AUTH_TOKEN` → the token from step 1
-   - `APP_PASSWORD` → a shared password for your lab (optional)
-5. Redeploy — your tracker is live
-
-Free tier on Render spins down after inactivity (~30s cold start). Your data is safe in Turso regardless. Starter plan ($7/mo) keeps it warm.
-
-### Alternative: any server with Node.js
+Check it's up:
 
 ```bash
-npm install
-npm run build
-TURSO_URL=libsql://... TURSO_AUTH_TOKEN=... APP_PASSWORD=secret PORT=3000 node build
+curl http://localhost:8100/health
+# {"ok":true,"behav_utils_available":true,"version":"..."}
 ```
 
-Without Turso env vars, it falls back to a local SQLite file at `data/tracker.db`.
-
-### Environment variables
-
-| Variable | Required | Default | Description |
-|---|---|---|---|
-| `TURSO_URL` | For production | — | Turso database URL |
-| `TURSO_AUTH_TOKEN` | For production | — | Turso auth token |
-| `APP_PASSWORD` | No | — | Shared password. If not set, no login required. |
-| `PORT` | No | 3000 | Server port |
-| `DATA_DIR` | No | `./data` | Local SQLite file directory (dev only) |
+You now have two long-running processes (web app on 5173, analysis
+service on 8100). Keep both running; use a third terminal for
+`psql` / `curl`.
 
 ---
 
-## Password protection
+## First-time project setup
 
-```bash
-# Local testing
-APP_PASSWORD=labpass npm run dev
+1. **Settings** → set the project title, supervisor, committee, and the
+   processed-data directory (the parent folder containing per-animal
+   subfolders).
+2. **Settings** → paste your `behav_utils` config YAML into the config
+   field. The analysis service uses this to interpret raw CSVs; scanning
+   will not work without it. (It is stored in `projects.config_yaml`.)
+3. Define at least one **aim** with a trajectory of training stages.
+4. Add your **animals** (Animals page).
+5. **Sessions** → "Scan folder" ingests matching CSVs.
 
-# Production — set in Render dashboard or as env var
+### Importing a backup
+
+Settings → Import accepts a JSON backup. Note it imports the **currently
+selected** project; import once per project if your backup has several.
+
+---
+
+## How scanning works
+
+- The web app's `/api/scan` reads the project's `config_yaml` from the
+  database and calls the analysis service.
+- The analysis service walks the data directory, loads each
+  `Trial_Summary*.csv` via `behav_utils`, applies masking (from the
+  `masking_sessions` block in the config), computes summary statistics
+  plus psychometric/update-matrix data, and returns them.
+- The web app upserts the results into the `sessions` table.
+- If no `config_yaml` is set, or the analysis service is unreachable, the
+  scan falls back to reading pre-computed JSON files (legacy path) — which
+  will find nothing in a raw-CSV directory. If a scan returns
+  `"source":"json-files"`, the analysis service was not used; check the
+  config and that the service is running.
+
+Empty CSVs (aborted recordings) produce errors in the scan result and no
+usable session — this is expected.
+
+---
+
+## Data model
+
+Raw data layout on the network volume:
+
+```
+{root}/{animal_id}/SOUND_CAT_{animal_id}_{YYYY}_{M}_{DD}/Trial_Summary{timestamp}.csv
 ```
 
-No password set = no login screen. Sessions last 30 days. Logout button is in the sidebar.
+PostgreSQL tables (assembled by `src/lib/server/db.js` into the shape the
+frontend expects): `projects`, `aims`, `trajectory_stages`, `animals`,
+`sessions` (behavioural sessions), `transitions` (stage changes),
+`milestone_phases`, `milestone_items`, `log_entries`, `protocols`,
+`protocol_items`, `events`, `scan_roots`, `meta`, `users`.
+
+Note the naming: the `sessions` **table** holds behavioural sessions; in
+the frontend, the store named `sessions` actually holds **transitions**
+(stage changes), and behavioural sessions live in `session_data`. This is
+a known confusing carry-over from an earlier schema.
+
+Per-session metrics are stored as JSONB in `sessions.stats`, including
+session-type flags `is_masking`, `is_opto`, `opto_frac`, the empirical
+psychometric data (`psych_bin_*`, `psych_curve_*`), and the update matrix
+(`um_0_0` … `um_7_7`).
 
 ---
 
-## Usage guide
+## Project structure
 
-### Projects
-
-The sidebar dropdown lets you switch between projects or create new ones. Each project has its own aims, animals, milestones, protocols, log, and settings — completely isolated.
-
-### Aims & trajectories
-
-**Settings** → **Aims**: define your project's aims. Each aim has a label, colour, description, tools, and a **stage trajectory** (the ordered list of stages an animal progresses through). Stages appear as the trajectory bar on the Animals page.
-
-### Animals
-
-Register animals and assign to an aim. The trajectory column shows progression. Stage changes are best logged via **Transitions**, which auto-updates the animal's current stage.
-
-### Milestones & Gantt
-
-Each phase has a name, colour, optional Gantt month range, optional sub-rows, and a checklist. Click items to cycle status. Items marked as **milestone** with a **Gantt month** appear as diamonds on the Overview Gantt chart.
-
-### Log (decisions & issues)
-
-Unified log with a `kind` field (decision or issue). Click status badges to cycle. Filters for kind, status, and priority.
-
-### Protocols
-
-Two sections per protocol: **steps** (rich text) and **checklist** (status-cycling items). Optionally linked to an aim.
-
-### Calendar
-
-Aggregates deadlines from milestones, log entries, and custom events. Right panel shows upcoming items within 60 days.
-
-### Rich text
-
-The formatting toolbar (hypothesis, protocol steps, log descriptions) supports:
-- **B** bold, *I* italic, `</>` code
-- **H** heading, **h** sub-heading, **•** bullet list
-- **A** colour highlights (yellow, green, blue, red, purple)
-- **Preview** toggle, **Ctrl+B** / **Ctrl+I** shortcuts
-
-### Data management
-
-**Settings** → **Data Management**: export/import JSON backups, reset to example data, or delete a project.
+```
+src/
+  routes/
+    +page.svelte              Overview (Gantt, digest)
+    animals/+page.svelte      Animal registry
+    animals/[id]/+page.svelte Animal detail (curriculum, plots, history)
+    sessions/+page.svelte     Behavioural sessions + trajectory chart
+    transitions/+page.svelte  Stage transitions
+    milestones/+page.svelte   Milestones
+    protocols/+page.svelte    Protocols
+    log/+page.svelte          Log
+    calendar/+page.svelte     Calendar
+    settings/+page.svelte     Project settings, import/export, scan config
+    api/                      Per-entity REST endpoints (animals, sessions,
+                              transitions, milestones, log, protocols,
+                              events, aims, project, settings) + auth, pdf,
+                              scan, data
+  lib/
+    server/db.js              PostgreSQL data-access layer
+    stores.js                 Frontend stores (one save/remove fn per entity)
+    components/               LineChart, PsychometricPlot, UpdateMatrix,
+                              CurriculumStrip, Nav, Toast, MarkdownEditor,
+                              PdfViewer
+    flags.js                  Threshold "needs attention" rules
+    utils.js                  Date / id helpers
+schema.sql                    Canonical database schema
+analysis-service/
+  app.py                      FastAPI service (/health, /scan, /process-csv)
+  behav_utils/                Vendored copy of the analysis package
+  requirements.txt
+```
 
 ---
 
-## Tech stack
+## Configuration
 
-- **Frontend:** SvelteKit 2, Svelte 5
-- **Backend:** SvelteKit server routes (Node adapter)
-- **Database:** SQLite via [@libsql/client](https://github.com/tursodatabase/libsql-client-ts) — local file for dev, Turso cloud for production
-- **Deployment:** Render (or any Node.js host)
-- **No external CDN dependencies**
+| Variable        | Required | Purpose                                            |
+|-----------------|----------|----------------------------------------------------|
+| `DATABASE_URL`  | yes      | PostgreSQL connection string                       |
+| `APP_PASSWORD`  | no       | If set, the app requires this password to log in   |
+| `ANALYSIS_URL`  | no       | Analysis service URL (default http://localhost:8100) |
+
+The `behav_utils` config (column mappings, masking sessions, etc.) is not
+an env var — it lives per-project in `projects.config_yaml`, editable in
+Settings.
+
+---
+
+## Common issues
+
+| Symptom | Likely cause |
+|---|---|
+| `DATABASE_URL not set` | Env var missing in this terminal — `source ~/.zshrc` or prefix the command |
+| `psql: command not found` | PostgreSQL bin not on PATH (add `.../postgresql@NN/bin`) |
+| Scan returns `"source":"json-files"` | `config_yaml` missing for the project, or analysis service down |
+| `ModuleNotFoundError` from the service | Launched with bare `uvicorn` instead of `.venv/bin/python -m uvicorn` |
+| Scan returns 0 sessions, no errors | Wrong data directory, or directory has no scannable folders |
+| `fetch failed` on scan | Long scan dropped the HTTP connection (see `src/routes/api/scan/+server.js` timeout/agent settings) |
+
+---
+
+## Notes
+
+- The analysis service is required for live scanning. If you only need to
+  view already-imported data, the web app runs without it.
+- Re-scanning re-processes every CSV (no skip-if-known yet), so a full
+  scan over a network volume can take several minutes.
+- `behav_utils` is currently vendored into `analysis-service/`. Once it is
+  published, it can be installed as a package instead.
 
 ---
 
 ## Development
 
 ```bash
-npm run dev       # dev server with hot reload
-npm run build     # production build
-npm run preview   # preview production build locally
-node build        # run production server
+npm run dev          # dev server with HMR
+npm run build        # production build (Node adapter)
+npm run preview      # preview the production build
+npm run start        # run the built app (node build)
 ```
-
-Delete `data/tracker.db` to re-seed from scratch.
-
-### Project structure
-
-```
-src/
-  lib/
-    config.js              # seed data for new projects
-    stores.js              # reactive stores (project-scoped)
-    utils.js               # markdown renderer, helpers
-    server/db.js           # database layer (libsql)
-    components/
-      Nav.svelte           # sidebar with project selector
-      Toast.svelte         # notifications
-      MarkdownEditor.svelte # rich text toolbar
-  routes/
-    +layout.svelte         # root layout (nav + auth gate)
-    +page.svelte           # Overview (stats, hypothesis, Gantt)
-    animals/               # animal registry
-    transitions/           # stage change log
-    milestones/            # phase checklists + Gantt data
-    log/                   # decisions & issues
-    protocols/             # procedures + checklists
-    calendar/              # deadline aggregator
-    settings/              # project config, aims, data mgmt
-    login/                 # password gate
-    api/data/              # data read/write endpoint
-    api/auth/              # session endpoint
-data/
-  tracker.db               # local SQLite (gitignored)
-```
-
----
 
 ## License
 
