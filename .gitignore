@@ -28,13 +28,17 @@ analysis-service/**/__pycache__/
 *.db
 *.db-shm
 *.db-wal
+*.db-journal
 
-# Local data — never commit anything in here except the placeholder
+# Local data 
 data/*
 !data/.gitkeep
-# App backups/exports and stray DBs
+
+# Extra safety: SQLite variants and app backups/exports anywhere
 *.sqlite
 *.sqlite3
+data.json
+data.json.migrated
 export_*.json
 *.backup.json
 

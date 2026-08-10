@@ -1,9 +1,9 @@
 # Project Tracker
 
-A web application for managing lab animal training pipelines, behavioural
-performance data, experimental milestones, and research projects. Built
-for head-fixed auditory two-alternative forced-choice (2AFC) psychophysics
-experiments in mice.
+A web app for managing mouse-training pipelines and behavioural data for
+head-fixed auditory two-alternative forced-choice (2AFC) psychophysics
+experiments in mice. Made for my own lab, and primarily built with AI
+coding assistants; shared as a working tool, not a code sample.
 
 It does two things:
 
@@ -15,6 +15,7 @@ It does two things:
    reaction times, history weights, etc.) for browsing and plotting.
 
 ![License](https://img.shields.io/badge/license-MIT-green)
+
 ---
 
 ## Stack
@@ -197,11 +198,11 @@ analysis-service/
 
 ## Configuration
 
-| Variable        | Required | Purpose                                            |
-|-----------------|----------|----------------------------------------------------|
-| `DATABASE_URL`  | yes      | PostgreSQL connection string                       |
-| `APP_PASSWORD`  | no       | If set, the app requires this password to log in   |
-| `ANALYSIS_URL`  | no       | Analysis service URL (default http://localhost:8100) |
+| Variable         | Required | Purpose                                              |
+| ---------------- | -------- | ---------------------------------------------------- |
+| `DATABASE_URL` | yes      | PostgreSQL connection string                         |
+| `APP_PASSWORD` | no       | If set, the app requires this password to log in     |
+| `ANALYSIS_URL` | no       | Analysis service URL (default http://localhost:8100) |
 
 The `behav_utils` config (column mappings, masking sessions, etc.) is not
 an env var — it lives per-project in `projects.config_yaml`, editable in
@@ -211,14 +212,14 @@ Settings.
 
 ## Common issues
 
-| Symptom | Likely cause |
-|---|---|
-| `DATABASE_URL not set` | Env var missing in this terminal — `source ~/.zshrc` or prefix the command |
-| `psql: command not found` | PostgreSQL bin not on PATH (add `.../postgresql@NN/bin`) |
-| Scan returns `"source":"json-files"` | `config_yaml` missing for the project, or analysis service down |
-| `ModuleNotFoundError` from the service | Launched with bare `uvicorn` instead of `.venv/bin/python -m uvicorn` |
-| Scan returns 0 sessions, no errors | Wrong data directory, or directory has no scannable folders |
-| `fetch failed` on scan | Long scan dropped the HTTP connection (see `src/routes/api/scan/+server.js` timeout/agent settings) |
+| Symptom                                  | Likely cause                                                                                         |
+| ---------------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| `DATABASE_URL not set`                 | Env var missing in this terminal —`source ~/.zshrc` or prefix the command                         |
+| `psql: command not found`              | PostgreSQL bin not on PATH (add`.../postgresql@NN/bin`)                                            |
+| Scan returns`"source":"json-files"`    | `config_yaml` missing for the project, or analysis service down                                    |
+| `ModuleNotFoundError` from the service | Launched with bare`uvicorn` instead of `.venv/bin/python -m uvicorn`                             |
+| Scan returns 0 sessions, no errors       | Wrong data directory, or directory has no scannable folders                                          |
+| `fetch failed` on scan                 | Long scan dropped the HTTP connection (see`src/routes/api/scan/+server.js` timeout/agent settings) |
 
 ---
 
