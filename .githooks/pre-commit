@@ -1,0 +1,37 @@
+#!/bin/sh
+# ---------------------------------------------------------------------------
+# pre-commit guard — blocks committing databases, local data, and secrets.
+# This is a backstop for the .gitignore, catching accidental `git add -f`
+# or `git add -A` of files that should never be public.
+#
+# Enable once per clone:
+#     git config core.hooksPath .githooks
+#     chmod +x .githooks/pre-commit
+#
+# Bypass for a single commit (use sparingly):  git commit --no-verify
+# ---------------------------------------------------------------------------
+
+staged=$(git diff --cached --name-only --diff-filter=AM)
+[ -z "$staged" ] && exit 0
+
+# 1. Anything under data/ except the .gitkeep placeholder
+bad_data=$(printf '%s\n' "$staged" | grep -E '^data/' | grep -vE '^data/\.gitkeep$')
+
+# 2. Database / SQLite files anywhere in the tree
+bad_db=$(printf '%s\n' "$staged" | grep -iE '\.(db|db-shm|db-wal|db-journal|sqlite|sqlite3)$')
+
+# 3. Real env files (but allow .env.example)
+bad_env=$(printf '%s\n' "$staged" | grep -E '(^|/)\.env($|\.)' | grep -vE '(^|/)\.env\.example$')
+
+offenders=$(printf '%s\n%s\n%s\n' "$bad_data" "$bad_db" "$bad_env" | grep -v '^$' | sort -u)
+
+if [ -n "$offenders" ]; then
+  echo "✗ commit blocked — these look like data/DB/secret files and must not be committed:"
+  printf '%s\n' "$offenders" | sed 's/^/      /'
+  echo
+  echo "  Unstage them:   git restore --staged <file>"
+  echo "  Intentional?    git commit --no-verify   (bypasses this check)"
+  exit 1
+fi
+
+exit 0

@@ -29,6 +29,15 @@ analysis-service/**/__pycache__/
 *.db-shm
 *.db-wal
 
+# Local data — never commit anything in here except the placeholder
+data/*
+!data/.gitkeep
+# App backups/exports and stray DBs
+*.sqlite
+*.sqlite3
+export_*.json
+*.backup.json
+
 # Scratch / temp scripts
 /tmp/
 test.py
